@@ -1,0 +1,20 @@
+{
+  "watch": [
+    "server.js",
+    "controllers/",
+    "dbconnect.js", 
+    "middleware.js",
+    ".env"
+  ],
+  "ext": "js,json",
+  "ignore": [
+    "node_modules/",
+    "*.log",
+    "test*.js"
+  ],
+  "delay": "1000",
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "verbose": true
+}

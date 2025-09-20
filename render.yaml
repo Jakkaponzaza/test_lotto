@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: lotto-api
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_HOST
+        value: 202.28.34.203
+      - key: DB_PORT
+        value: 3306
+      - key: DB_USER
+        value: mb68_65011212115
+      - key: DB_PASS
+        value: g0bPZ$Cib3i9
+      - key: DB_NAME
+        value: mb68_65011212115
+      - key: CORS_ORIGIN
+        value: "*"

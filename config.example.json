@@ -1,0 +1,22 @@
+{
+  "server": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "description": "API Server Configuration"
+  },
+  "database": {
+    "host": "your_database_host",
+    "port": 3306,
+    "user": "your_database_user",
+    "password": "your_database_password",
+    "database": "your_database_name"
+  },
+  "cors": {
+    "origin": "https://your-frontend-domain.com",
+    "description": "Set specific domain for production security"
+  },
+  "security": {
+    "jwt_secret": "your_jwt_secret_key_here",
+    "bcrypt_rounds": 12
+  }
+}

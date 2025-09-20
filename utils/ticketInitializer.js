@@ -11,8 +11,6 @@ async function initializeLotteryTickets() {
     const ticketCount = await TicketService.getTicketCount();
     
     if (ticketCount === 0) {
-      console.log('🎫 No lottery tickets found, creating initial 120 tickets...');
-      
       // Get admin user ID for created_by
       const adminUser = await UserService.getAdminUser();
       const adminUserId = adminUser ? adminUser.user_id : 1; // fallback to 1
@@ -32,13 +30,9 @@ async function initializeLotteryTickets() {
       
       // Create tickets in database
       const inserted = await TicketService.createLotteryTickets(ticketData);
-      
-      console.log(`✅ Created ${inserted} initial lottery tickets successfully!`);
-    } else {
-      console.log(`🎫 Found ${ticketCount} existing lottery tickets`);
     }
   } catch (error) {
-    console.error('❌ Error initializing lottery tickets:', error);
+    throw error;
   }
 }
 

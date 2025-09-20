@@ -1,7 +1,8 @@
 const { getConnection } = require('../config/database');
+const { databaseErrorHandler } = require('../utils/databaseErrorHandler');
 
 /**
- * Prize database service operations
+ * Prize service - ใช้เฉพาะ table ที่มีใน database_me
  */
 class PrizeService {
   /**
@@ -20,23 +21,16 @@ class PrizeService {
   }
 
   /**
-   * Create prize records
+   * Create prize records (ตรงกับ database_me schema)
    * @param {Array} prizeData - Array of prize data {rank, amount}
    * @returns {Promise<boolean>} True if created successfully
    */
   static async createPrizes(prizeData) {
     const connection = await getConnection();
     try {
-      // Insert special metadata record (rank = 0)
-      await connection.execute(
-        'INSERT INTO Prize (amount, `rank`) VALUES (?, ?)',
-        [0, 0]
-      );
-
-      // Insert individual prize records
       const prizePromises = prizeData.map(prize => {
         return connection.execute(
-          'INSERT INTO Prize (amount, `rank`) VALUES (?, ?)',
+          'INSERT INTO Prize (amont, `rank`) VALUES (?, ?)',
           [prize.amount, prize.rank]
         );
       });
@@ -49,14 +43,14 @@ class PrizeService {
   }
 
   /**
-   * Get latest prizes (excluding metadata record)
-   * @returns {Promise<Array>} Array of prize objects
+   * Get latest prizes
+   * @returns {Promise<Array>} Array of prizes
    */
   static async getLatestPrizes() {
     const connection = await getConnection();
     try {
       const [prizes] = await connection.execute(
-        'SELECT prize_id, amount, `rank` FROM Prize WHERE `rank` > 0 ORDER BY prize_id DESC LIMIT 5'
+        'SELECT prize_id, amont as amount, `rank` FROM Prize WHERE `rank` > 0 ORDER BY prize_id DESC LIMIT 5'
       );
       return prizes;
     } finally {
@@ -65,62 +59,32 @@ class PrizeService {
   }
 
   /**
-   * Get prizes ordered by rank
-   * @returns {Promise<Array>} Array of prize objects ordered by rank
+   * Get prizes by rank
+   * @returns {Promise<Array>} Array of prizes ordered by rank
    */
   static async getPrizesByRank() {
     const connection = await getConnection();
     try {
       const [prizes] = await connection.execute(
-        'SELECT prize_id, amount, `rank` FROM Prize WHERE `rank` > 0 ORDER BY `rank` ASC'
+        'SELECT prize_id, amont as amount, `rank` FROM Prize WHERE `rank` > 0 ORDER BY `rank` ASC'
       );
       return prizes;
     } finally {
       await connection.end();
     }
   }
-}
 
-/**
- * Purchase database service operations
- */
-class PurchaseService {
   /**
-   * Create purchase record
+   * Claim prize - ไม่รองรับใน database_me เพราะไม่มี ticket reference
    * @param {number} userId - User ID
-   * @param {number} totalPrice - Total purchase price
-   * @returns {Promise<number>} Purchase ID
+   * @param {string} ticketNumber - Ticket number
+   * @returns {Promise<Object>} Claim result
    */
-  static async createPurchase(userId, totalPrice) {
-    const connection = await getConnection();
-    try {
-      const [result] = await connection.execute(
-        'INSERT INTO Purchase (user_id, date, total_price) VALUES (?, NOW(), ?)',
-        [userId, totalPrice]
-      );
-      return result.insertId;
-    } finally {
-      await connection.end();
-    }
-  }
-
-  /**
-   * Delete all purchases
-   * @returns {Promise<number>} Number of deleted purchases
-   */
-  static async deleteAllPurchases() {
-    const connection = await getConnection();
-    try {
-      const [result] = await connection.execute('DELETE FROM Purchase');
-      await connection.execute('ALTER TABLE Purchase AUTO_INCREMENT = 1');
-      return result.affectedRows;
-    } finally {
-      await connection.end();
-    }
+  static async claimPrize(userId, ticketNumber) {
+    // database_me ไม่มี ticket_id reference ใน Prize table
+    // ดังนั้นไม่สามารถเช็คได้ว่าตั๋วใดถูกรางวัล
+    throw new Error('Prize claiming not supported - database schema does not include ticket references in Prize table');
   }
 }
 
-module.exports = {
-  PrizeService,
-  PurchaseService
-};
+module.exports = { PrizeService };

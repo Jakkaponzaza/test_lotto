@@ -14,23 +14,15 @@ class ConfigLoader {
 
   loadConfig() {
     try {
-      console.log('📁 Loading config from config.json...');
-      
       if (!fs.existsSync(this.configPath)) {
-        console.log('❌ config.json not found, creating default...');
         this.createDefaultConfig();
       }
       
       const configData = fs.readFileSync(this.configPath, 'utf8');
       this.config = JSON.parse(configData);
       
-      console.log('✅ Config loaded successfully');
-      this.printConfig();
-      
       return this.config;
     } catch (error) {
-      console.error('❌ Failed to load config.json:', error.message);
-      console.log('🔄 Using default configuration');
       return this.getDefaultConfig();
     }
   }
@@ -40,9 +32,8 @@ class ConfigLoader {
     
     try {
       fs.writeFileSync(this.configPath, JSON.stringify(defaultConfig, null, 2));
-      console.log('✅ Default config.json created');
     } catch (error) {
-      console.error('❌ Failed to create config.json:', error.message);
+      // Silently fail
     }
   }
 
@@ -72,16 +63,7 @@ class ConfigLoader {
   }
 
   printConfig() {
-    if (!this.config) return;
-    
-    console.log('');
-    console.log('📁 ===== CONFIG.JSON LOADED =====');
-    console.log(`📁 Server Port: ${this.config.server?.port || 3000}`);
-    console.log(`📁 Server Host: ${this.config.server?.host || '0.0.0.0'}`);
-    console.log(`📁 Database: ${this.config.database?.host || 'localhost'}`);
-    console.log(`📁 CORS Origin: ${this.config.cors?.origin || '*'}`);
-    console.log('📁 ==============================');
-    console.log('');
+    // Silent - no logging
   }
 
   // Getters for easy access

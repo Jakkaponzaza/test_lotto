@@ -1,4 +1,11 @@
 const { getConnection } = require('../config/database');
+const { databaseErrorHandler } = require('../utils/databaseErrorHandler');
+const { 
+  WalletValidator, 
+  TicketValidator, 
+  UserValidator,
+  RateLimitValidator 
+} = require('../utils/businessLogicValidator');
 
 /**
  * Ticket database service operations
@@ -99,6 +106,73 @@ class TicketService {
     } finally {
       await connection.end();
     }
+  }
+
+  /**
+   * Purchase tickets with validation and transaction
+   * @param {Array} ticketIds - Array of ticket IDs to purchase
+   * @param {number} userId - User ID making the purchase
+   * @returns {Promise<Object>} Purchase result
+   */
+  static async purchaseTickets(ticketIds, userId) {
+    // Apply rate limiting for ticket purchases
+    RateLimitValidator.validateRequestRate(userId, 'ticket_purchase', 5, 60000); // 5 purchases per minute
+
+    return databaseErrorHandler.executeTransaction(async (connection) => {
+      // Get available tickets with row lock
+      const placeholders = ticketIds.map(() => '?').join(',');
+      const [tickets] = await connection.execute(
+        `SELECT ticket_id, number, price FROM Ticket WHERE ticket_id IN (${placeholders}) AND status = 'available' FOR UPDATE`,
+        ticketIds
+      );
+
+      // Validate ticket availability with race condition handling
+      TicketValidator.validateTicketAvailability(ticketIds, tickets, userId);
+
+      const totalCost = tickets.reduce((sum, ticket) => sum + parseFloat(ticket.price), 0);
+
+      // Get user wallet with row lock
+      const [userResult] = await connection.execute(
+        'SELECT wallet FROM User WHERE user_id = ? FOR UPDATE',
+        [userId]
+      );
+
+      if (userResult.length === 0) {
+        UserValidator.validateUserExists(null, userId);
+      }
+
+      const currentWallet = parseFloat(userResult[0].wallet);
+
+      // Validate wallet has sufficient funds
+      WalletValidator.validateSufficientFunds(currentWallet, totalCost, userId);
+
+      // Update user wallet
+      const newWallet = currentWallet - totalCost;
+      await connection.execute(
+        'UPDATE User SET wallet = ? WHERE user_id = ?',
+        [newWallet, userId]
+      );
+
+      // Create purchase record
+      const [purchaseResult] = await connection.execute(
+        'INSERT INTO Purchase (user_id, date, total_price) VALUES (?, NOW(), ?)',
+        [userId, totalCost]
+      );
+
+      // Update ticket status
+      await connection.execute(
+        `UPDATE Ticket SET status = 'sold', created_by = ?, purchase_id = ? WHERE ticket_id IN (${placeholders})`,
+        [userId, purchaseResult.insertId, ...ticketIds]
+      );
+
+      return {
+        success: true,
+        purchaseId: purchaseResult.insertId,
+        purchasedTickets: tickets,
+        totalCost: totalCost,
+        remainingWallet: newWallet
+      };
+    }, getConnection, 'purchaseTickets', { ticketIds, userId });
   }
 
   /**
@@ -222,16 +296,15 @@ class TicketService {
       
       for (let i = 0; i < ticketData.length; i += batchSize) {
         const batch = ticketData.slice(i, i + batchSize);
-        const placeholders = batch.map(() => '(?, ?, ?, ?, ?)').join(',');
+        const placeholders = batch.map(() => '(?, ?, ?)').join(',');
         const values = [];
-        const currentDate = new Date();
         
         for (const ticket of batch) {
-          values.push(ticket.number, ticket.price, currentDate, currentDate, ticket.adminUserId);
+          values.push(ticket.number, ticket.price, ticket.adminUserId);
         }
         
         await connection.execute(
-          `INSERT INTO Ticket (number, price, start_date, end_date, created_by) VALUES ${placeholders}`,
+          `INSERT INTO Ticket (number, price, created_by) VALUES ${placeholders}`,
           values
         );
         inserted += batch.length;

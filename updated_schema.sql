@@ -52,40 +52,14 @@ ALTER TABLE `Ticket`
 ADD CONSTRAINT `fk_ticket_purchase` 
 FOREIGN KEY (`purchase_id`) REFERENCES `Purchase`(`purchase_id`) ON DELETE SET NULL;
 
--- ตาราง Prize สำหรับเก็บผลรางวัล
+-- ตาราง Prize สำหรับเก็บผลรางวัล (ตรงกับ database_me)
 DROP TABLE IF EXISTS `Prize`;
 CREATE TABLE `Prize` (
   `prize_id` INT AUTO_INCREMENT PRIMARY KEY,
-  `amount` DECIMAL(10,2) NOT NULL,
+  `amont` DECIMAL(10,2) NOT NULL,
   `rank` INT NOT NULL,
-  `ticket_id` INT NULL,
-  `draw_date` DATETIME DEFAULT CURRENT_TIMESTAMP,
-  `claimed` BOOLEAN DEFAULT FALSE,
-  
-  INDEX `idx_prize_rank` (`rank`),
-  INDEX `idx_prize_draw_date` (`draw_date`),
-  UNIQUE KEY `unique_rank_draw` (`rank`, `draw_date`),
-  FOREIGN KEY (`ticket_id`) REFERENCES `Ticket`(`ticket_id`) ON DELETE SET NULL
+  UNIQUE KEY `unique_rank` (`rank`)
 );
-
--- ตาราง DrawResult สำหรับเก็บผลการออกรางวัลแต่ละครั้ง
-DROP TABLE IF EXISTS `DrawResult`;
-CREATE TABLE `DrawResult` (
-  `draw_id` INT AUTO_INCREMENT PRIMARY KEY,
-  `pool_type` ENUM('sold', 'all') NOT NULL,
-  `draw_date` DATETIME DEFAULT CURRENT_TIMESTAMP,
-  `total_prizes` INT DEFAULT 5,
-  `status` ENUM('active', 'completed') DEFAULT 'active',
-  
-  INDEX `idx_draw_date` (`draw_date`),
-  INDEX `idx_draw_status` (`status`)
-);
-
--- เพิ่ม foreign key ให้ Prize เชื่อมกับ DrawResult
-ALTER TABLE `Prize` 
-ADD COLUMN `draw_id` INT NULL,
-ADD CONSTRAINT `fk_prize_draw` 
-FOREIGN KEY (`draw_id`) REFERENCES `DrawResult`(`draw_id`) ON DELETE CASCADE;
 
 -- สร้างผู้ใช้ Admin เริ่มต้น
 INSERT INTO `User` (`username`, `email`, `phone`, `role`, `password`, `wallet`) 

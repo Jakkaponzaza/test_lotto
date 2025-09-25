@@ -1,60 +1,102 @@
-# Node.js
+# =======================================================
+# 🚫 LOTTO API - GIT IGNORE RULES
+# =======================================================
+
+# 📦 Node.js
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+package-lock.json
 
-# Environment files
+# 🔐 Environment files (NEVER commit these)
 .env
 .env.local
 .env.development
 .env.test
 config.json
 
-# Keep production examples
+# ✅ Keep these files (production examples)
+!.env.example
 !.env.production
 !render.yaml
 !README.md
 !database_schema.sql
+!database_schema_postgresql.sql
+!BACKEND_DEPLOYMENT_CHECKLIST.md
 
-# Logs
-logs
+# 📊 Logs
+logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Runtime data
-pids
+# 🏃 Runtime data
+pids/
 *.pid
 *.seed
 *.pid.lock
 
-# Coverage directory used by tools like istanbul
+# 📈 Coverage directory
 coverage/
+.nyc_output/
 
-# Dependency directories
+# 📚 Dependency directories
 node_modules/
 jspm_packages/
 
-# Optional npm cache directory
+# 🗂️ Optional npm cache directory
 .npm
 
-# Optional REPL history
+# 📝 Optional REPL history
 .node_repl_history
 
-# Output of 'npm pack'
+# 📦 Output of 'npm pack'
 *.tgz
 
-# Yarn Integrity file
+# 🧶 Yarn Integrity file
 .yarn-integrity
 
-# dotenv environment variables file
-.env
-
-# IDE
+# 💻 IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
+*.sublime-project
+*.sublime-workspace
 
-# OS
+# 🖥️ OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+
+# 🔧 Build outputs
+dist/
+build/
+out/
+
+# 🧪 Test outputs
+test-results/
+coverage/
+
+# 🚀 Deployment files (optional)
+.deploy/
+.vercel/
+.netlify/
+
+# 🔒 Security files
+*.pem
+*.key
+*.crt
+
+# =======================================================
+# 📋 NOTES:
+# - Never commit .env files with real credentials
+# - Keep .env.example for documentation
+# - Production configs are in render.yaml
+# =======================================================

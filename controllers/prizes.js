@@ -62,30 +62,53 @@ router.get('/check/:ticketNumber', asyncHandler(async (req, res) => {
     throw new BusinessLogicError('หมายเลขลอตเตอรี่ต้องเป็นตัวเลข 6 หลัก', 'INVALID_TICKET_NUMBER_FORMAT');
   }
 
+  // Check if the ticket is a winner
+  const winnerInfo = await DrawService.checkTicketWinner(ticketNumber);
+  
+  if (winnerInfo) {
+    return sendSuccess(res, {
+      isWinner: true,
+      ticketNumber: ticketNumber,
+      prizeInfo: winnerInfo
+    }, `ลอตเตอรี่หมายเลข ${ticketNumber} ถูกรางวัลที่ ${winnerInfo.rank} จำนวน ${winnerInfo.amount} บาท`);
+  }
 
-
-  // ไม่รองรับการเช็ครางวัลใน database_me
   return sendSuccess(res, {
     isWinner: false,
     ticketNumber: ticketNumber,
-    message: 'Prize checking not supported with current database schema'
-  }, 'ไม่รองรับการตรวจสอบรางวัลในระบบปัจจุบัน');
+    message: 'ลอตเตอรี่หมายเลขนี้ไม่ถูกรางวัล'
+  }, 'ไม่ถูกรางวัล');
 }));
 
 // ✅ Get Latest Draw Results (public endpoint)
 router.get('/draw/latest', asyncHandler(async (req, res) => {
-  const latestDraw = await DrawService.getLatestDraw();
-  
-  if (!latestDraw) {
-    return sendSuccess(res, { draw: null }, 'ยังไม่มีการออกรางวัล');
-  }
+  try {
+    // Get the latest draw result from DrawService
+    const latestDrawResult = await DrawService.getLatestDraw();
+    
+    if (!latestDrawResult) {
+      return sendSuccess(res, { drawResult: null }, 'ยังไม่มีการออกรางวัล');
+    }
 
-  sendSuccess(res, { draw: latestDraw }, 'ดึงผลรางวัลล่าสุดสำเร็จ');
+    // Format the draw result for the Flutter app
+    const formattedDrawResult = {
+      id: latestDrawResult.id,
+      poolType: latestDrawResult.poolType,
+      createdAt: latestDrawResult.createdAt,
+      prizes: latestDrawResult.prizes,
+      winners: latestDrawResult.winners
+    };
+
+    sendSuccess(res, { drawResult: formattedDrawResult }, 'ดึงผลรางวัลล่าสุดสำเร็จ');
+  } catch (error) {
+    console.error('Get latest draw error:', error);
+    sendError(res, 'เกิดข้อผิดพลาดในการดึงผลรางวัลล่าสุด', { details: error.message }, 500);
+  }
 }));
 
 // ✅ Create Prize (for admin)
 router.post('/', requireAdmin, asyncHandler(async (req, res) => {
-  const { amount, rank, ticket_id, draw_date, claimed } = req.body;
+  const { amount, rank, ticketNumber, draw_date, claimed } = req.body;
 
   // Enhanced validation for prize creation
   if (!amount || !rank) {
@@ -100,28 +123,27 @@ router.post('/', requireAdmin, asyncHandler(async (req, res) => {
     throw new BusinessLogicError('อันดับรางวัลต้องเป็นตัวเลขที่มากกว่า 0', 'INVALID_PRIZE_RANK');
   }
 
-  // Validate ticket_id if provided
-  if (ticket_id && (typeof ticket_id !== 'number' || ticket_id <= 0)) {
-    throw new BusinessLogicError('รหัสลอตเตอรี่ต้องเป็นตัวเลขที่มากกว่า 0', 'INVALID_TICKET_ID');
+  // Validate ticket number if provided
+  if (ticketNumber && (typeof ticketNumber !== 'string' || !/^[0-9]{6}$/.test(ticketNumber))) {
+    throw new BusinessLogicError('หมายเลขลอตเตอรี่ต้องเป็นตัวเลข 6 หลัก', 'INVALID_TICKET_NUMBER_FORMAT');
   }
 
   const connection = await getConnection();
   try {
     const [result] = await connection.execute(
-      'INSERT INTO Prize (amount, `rank`, ticket_id, draw_date, claimed) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO Prize (amount, `rank`, ticket_number) VALUES (?, ?, ?)',
       [
         parseFloat(amount),
         parseInt(rank),
-        ticket_id || null,
-        draw_date || new Date(),
-        claimed || false
+        ticketNumber || null
       ]
     );
 
     sendSuccess(res, {
       prize_id: result.insertId,
       amount: parseFloat(amount),
-      rank: parseInt(rank)
+      rank: parseInt(rank),
+      ticketNumber: ticketNumber || null
     }, 'สร้างรางวัลสำเร็จ', 201);
   } finally {
     await connection.end();

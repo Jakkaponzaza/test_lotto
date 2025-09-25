@@ -1,140 +1,141 @@
-# 🎰 Lotto API Backend
+# Lotto API Backend
 
-REST API สำหรับระบบลอตเตอรี่ออนไลน์
+REST API backend สำหรับระบบลอตเตอรี่ออนไลน์
 
 ## 🚀 Quick Start
 
-### 1. **Install Dependencies**
+### การติดตั้ง
 ```bash
 npm install
 ```
 
-### 2. **Setup Configuration**
+### การรัน Development
 ```bash
-# คัดลอกไฟล์ config ตัวอย่าง
-cp config.json.example config.json
-
-# แก้ไขไฟล์ config.json ตามต้องการ
+npm run dev
 ```
 
-### 3. **Start Server**
+### การรัน Production
 ```bash
-# Development
-npm run dev
-
-# Production
 npm start
 ```
 
-## 📁 Configuration
+## 🔧 Configuration
 
-### **config.json**
-```json
-{
-  "server": {
-    "port": 3000,
-    "host": "0.0.0.0"
-  },
-  "database": {
-    "host": "your-db-host",
-    "port": 3306,
-    "user": "your-username",
-    "password": "your-password",
-    "database": "your-database"
-  },
-  "cors": {
-    "origin": "*"
-  }
-}
+### Environment Variables
+สร้างไฟล์ `.env` หรือตั้งค่า environment variables:
+
+```env
+# Server Configuration
+PORT=3000
+NODE_ENV=development
+
+# Database Configuration
+DB_HOST=your_database_host
+DB_PORT=3306
+DB_USER=your_database_user
+DB_PASS=your_database_password
+DB_NAME=your_database_name
+
+# Security
+JWT_SECRET=your_jwt_secret_key
+BCRYPT_ROUNDS=12
+
+# CORS
+CORS_ORIGIN=*
 ```
+
+## 📊 Database Setup
+
+1. สร้างฐานข้อมูล MySQL
+2. Import schema จากไฟล์ `database_schema.sql`
+3. ตั้งค่า connection ใน `.env`
 
 ## 🌐 API Endpoints
 
-### **Health Check**
-```
-GET /health
-```
+### Authentication
+- `POST /api/auth/login` - เข้าสู่ระบบ
+- `POST /api/register` - สมัครสมาชิก
+- `POST /api/auth/refresh` - รีเฟรช token
+- `POST /api/auth/logout` - ออกจากระบบ
 
-### **Authentication**
-```
-POST /api/auth/login
-POST /api/register
-```
+### User Management
+- `GET /api/users/profile` - ข้อมูลผู้ใช้
+- `PUT /api/users/wallet` - อัพเดทกระเป๋าเงิน
+- `GET /api/users/purchases` - ประวัติการซื้อ
+- `GET /api/users/winnings` - ประวัติการถูกรางวัล
 
-### **Tickets**
-```
-GET /api/tickets
-POST /api/tickets/purchase
-```
+### Tickets
+- `GET /api/tickets` - รายการตั๋วทั้งหมด
+- `GET /api/tickets/my-tickets` - ตั๋วของฉัน
+- `POST /api/tickets/purchase` - ซื้อตั๋ว
 
-### **Admin**
-```
-GET /api/admin/stats
-POST /api/admin/reset
-```
+### Prizes
+- `GET /api/prizes` - รายการรางวัล
+- `POST /api/prizes/claim` - เคลมรางวัล
+- `GET /api/prizes/check/:ticketNumber` - ตรวจสอบรางวัล
 
-### **Prizes**
-```
-GET /api/prizes
-POST /api/prizes/claim
-```
+### Admin (ต้องมีสิทธิ์ admin)
+- `GET /api/admin/stats` - สstatistics
+- `GET /api/admin/overview` - ภาพรวมระบบ
+- `GET /api/admin/users` - จัดการผู้ใช้
+- `GET /api/admin/tickets` - จัดการตั๋ว
+- `POST /api/admin/draws` - สร้างการออกรางวัล
+- `POST /api/admin/reset` - รีเซ็ตระบบ
 
-## 🚀 Deploy on Render
+### Health Check
+- `GET /health` - ตรวจสอบสถานะ API
 
-### 1. **Push to GitHub**
+## 🚀 Deployment
+
+### Render.com
+1. เชื่อมต่อ GitHub repository
+2. ตั้งค่า environment variables
+3. Deploy
+
+### Heroku
 ```bash
-git init
-git add .
-git commit -m "Initial commit"
-git remote add origin YOUR_REPO_URL
-git push -u origin main
+heroku create your-app-name
+heroku config:set NODE_ENV=production
+heroku config:set DB_HOST=your_db_host
+# ... ตั้งค่า env vars อื่นๆ
+git push heroku main
 ```
 
-### 2. **Create Web Service on Render**
-- **Build Command:** `npm install`
-- **Start Command:** `npm start`
-- **Environment Variables:**
-  ```
-  NODE_ENV=production
-  DB_HOST=your-database-host
-  DB_PORT=3306
-  DB_USER=your-username
-  DB_PASS=your-password
-  DB_NAME=your-database
-  CORS_ORIGIN=*
-  ```
+### Railway
+1. เชื่อมต่อ GitHub repository
+2. ตั้งค่า environment variables
+3. Deploy
 
-### 3. **Auto Deploy**
-ใช้ไฟล์ `render.yaml` สำหรับ auto deploy
+## 📁 Project Structure
 
-## 🔧 Environment Variables
+```
+lotto-api/
+├── config/           # การตั้งค่า
+├── controllers/      # API controllers
+├── database/         # Database utilities
+├── helpers/          # Helper functions
+├── middleware/       # Express middleware
+├── services/         # Business logic
+├── utils/           # Utility functions
+├── .env             # Environment variables
+├── server.js        # Main server file
+├── package.json     # Dependencies
+└── database_schema.sql # Database schema
+```
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `NODE_ENV` | Environment | `development` |
-| `PORT` | Server port | `3000` |
-| `DB_HOST` | Database host | `localhost` |
-| `DB_PORT` | Database port | `3306` |
-| `DB_USER` | Database user | `root` |
-| `DB_PASS` | Database password | `` |
-| `DB_NAME` | Database name | `lotto_db` |
-| `CORS_ORIGIN` | CORS origin | `*` |
+## 🔒 Security Features
 
-## 📊 Database Schema
-
-### **Tables:**
-- `User` - ข้อมูลผู้ใช้
-- `Ticket` - ข้อมูลตั๋วลอตเตอรี่
-- `Purchase` - ข้อมูลการซื้อ
-- `Prize` - ข้อมูลรางวัล
-
-## 🔒 Security
-
-- ใช้ Environment Variables สำหรับข้อมูลสำคัญ
-- CORS configuration
+- JWT Authentication
+- Password hashing with bcrypt
+- Rate limiting
+- CORS protection
 - Input validation
-- Error handling
+- SQL injection prevention
 
-## 📝 License
+## 📝 Notes
 
-MIT License
+- ใช้ MySQL database
+- รองรับ CORS สำหรับ Flutter app
+- มี rate limiting ป้องกัน abuse
+- Auto-generate lottery tickets
+- Complete user management system

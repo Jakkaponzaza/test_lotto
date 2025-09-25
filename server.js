@@ -29,8 +29,8 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestLogger);
 
-// Apply rate limiting to API routes
-app.use('/api/', rateLimit(15 * 60 * 1000, 100)); // 100 requests per 15 minutes
+// Apply rate limiting to API routes - เพิ่มขีดจำกัดให้มากขึ้น
+app.use('/api/', rateLimit(5 * 60 * 1000, 500)); // 500 requests per 5 minutes
 
 // API Routes using modular controllers
 app.use('/api/auth', authController);
@@ -186,13 +186,13 @@ async function initializeDatabase() {
         await connection.execute(`
           CREATE TABLE Prize (
             prize_id INT AUTO_INCREMENT PRIMARY KEY,
-            amont DECIMAL(10,2) NOT NULL,
+            amount DECIMAL(10,2) NOT NULL,
             \`rank\` INT NOT NULL,
             UNIQUE KEY unique_rank (\`rank\`)
           )
         `);
       }
-      
+    
     } finally {
       await connection.end();
     }

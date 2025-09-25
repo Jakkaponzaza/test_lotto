@@ -65,6 +65,55 @@ async function validateAndFixDatabase() {
       console.log('✅ Database schema is valid');
     }
     
+    // Check Prize table structure and fix if needed
+    console.log('🔍 Validating Prize table schema...');
+    
+    // Check if Prize table exists
+    const [prizeTables] = await connection.execute("SHOW TABLES LIKE 'Prize'");
+    
+    if (prizeTables.length === 0) {
+      // Create Prize table with correct structure (without ticket_number)
+      console.log('🔧 Creating Prize table...');
+      await connection.execute(`
+        CREATE TABLE Prize (
+          prize_id INT AUTO_INCREMENT PRIMARY KEY,
+          amount DECIMAL(10,2) NOT NULL,
+          \`rank\` INT NOT NULL,
+          UNIQUE KEY unique_rank (\`rank\`)
+        )
+      `);
+      console.log('✅ Prize table created successfully');
+    }
+    
+    // Check and add prize_id column to Ticket table
+    console.log('🔍 Checking Ticket table for prize_id column...');
+    const [prizeIdColumns] = await connection.execute("SHOW COLUMNS FROM Ticket WHERE Field = 'prize_id'");
+    
+    if (prizeIdColumns.length === 0) {
+      console.log('🔧 Adding prize_id column to Ticket table...');
+      await connection.execute("ALTER TABLE Ticket ADD COLUMN prize_id INT DEFAULT NULL");
+      console.log('✅ prize_id column added to Ticket table');
+      
+      // Add foreign key constraint (ตรวจสอบว่ามี constraint อยู่แล้วหรือไม่)
+      try {
+        console.log('🔧 Adding foreign key constraint for prize_id...');
+        await connection.execute(`
+          ALTER TABLE Ticket 
+          ADD CONSTRAINT Ticket_ibfk_3 
+          FOREIGN KEY (prize_id) REFERENCES Prize(prize_id) ON DELETE SET NULL
+        `);
+        console.log('✅ Foreign key constraint added successfully');
+      } catch (constraintError) {
+        if (constraintError.code === 'ER_DUP_KEYNAME') {
+          console.log('✅ Foreign key constraint already exists');
+        } else {
+          console.log('⚠️ Foreign key constraint error (continuing anyway):', constraintError.message);
+        }
+      }
+    } else {
+      console.log('✅ prize_id column already exists in Ticket table');
+    }
+    
     return { success: true, message: 'Database schema validated successfully' };
   }, getConnection, 'validateAndFixDatabase');
 }
@@ -85,30 +134,11 @@ async function initializeDatabase() {
       await connection.execute(`
         CREATE TABLE Prize (
           prize_id INT AUTO_INCREMENT PRIMARY KEY,
-          amont DECIMAL(10,2) NOT NULL,
+          amount DECIMAL(10,2) NOT NULL,
           \`rank\` INT NOT NULL,
           UNIQUE KEY unique_rank (\`rank\`)
         )
       `);
-    } else {
-      // Check if Prize table has the correct structure (ตรงกับ database_me)
-      const [amontColumns] = await connection.execute(
-        "SHOW COLUMNS FROM Prize LIKE 'amont'"
-      );
-      
-      if (amontColumns.length === 0) {
-        // ลบตาราง Prize และสร้างใหม่ให้ตรงกับ database_me
-        await connection.execute('DROP TABLE IF EXISTS Prize');
-        
-        await connection.execute(`
-          CREATE TABLE Prize (
-            prize_id INT AUTO_INCREMENT PRIMARY KEY,
-            amont DECIMAL(10,2) NOT NULL,
-            \`rank\` INT NOT NULL,
-            UNIQUE KEY unique_rank (\`rank\`)
-          )
-        `);
-      }
     }
     
     return { success: true, message: 'Database initialized successfully' };

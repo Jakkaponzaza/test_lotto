@@ -8,15 +8,37 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 10000
       - key: DB_HOST
-        value: 202.28.34.203
+        fromDatabase:
+          name: lotto-db
+          property: host
       - key: DB_PORT
-        value: 3306
+        fromDatabase:
+          name: lotto-db
+          property: port
       - key: DB_USER
-        value: mb68_65011212115
+        fromDatabase:
+          name: lotto-db
+          property: user
       - key: DB_PASS
-        value: g0bPZ$Cib3i9
+        fromDatabase:
+          name: lotto-db
+          property: password
       - key: DB_NAME
-        value: mb68_65011212115
+        fromDatabase:
+          name: lotto-db
+          property: database
+      - key: JWT_SECRET
+        generateValue: true
+      - key: BCRYPT_ROUNDS
+        value: 12
       - key: CORS_ORIGIN
         value: "*"
+
+databases:
+  - name: lotto-db
+    databaseName: lotto_database
+    user: lotto_user
+    plan: free

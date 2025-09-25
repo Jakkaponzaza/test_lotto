@@ -115,19 +115,34 @@ class TicketService {
    * @returns {Promise<Object>} Purchase result
    */
   static async purchaseTickets(ticketIds, userId) {
-    // Apply rate limiting for ticket purchases
-    RateLimitValidator.validateRequestRate(userId, 'ticket_purchase', 5, 60000); // 5 purchases per minute
-
-    return databaseErrorHandler.executeTransaction(async (connection) => {
+    console.log('🎫 PURCHASE DEBUG: Received ticketIds:', ticketIds, 'userId:', userId);
+    
+    // Convert string IDs to integers
+    const numericTicketIds = ticketIds.map(id => parseInt(id));
+    console.log('🎫 PURCHASE DEBUG: Converted to numeric:', numericTicketIds);
+    
+    const connection = await getConnection();
+    
+    try {
+      await connection.beginTransaction();
+      
       // Get available tickets with row lock
-      const placeholders = ticketIds.map(() => '?').join(',');
+      const placeholders = numericTicketIds.map(() => '?').join(',');
       const [tickets] = await connection.execute(
         `SELECT ticket_id, number, price FROM Ticket WHERE ticket_id IN (${placeholders}) AND status = 'available' FOR UPDATE`,
-        ticketIds
+        numericTicketIds
       );
+      
+      console.log('🎫 PURCHASE DEBUG: Found available tickets:', tickets.length, 'out of', numericTicketIds.length);
 
-      // Validate ticket availability with race condition handling
-      TicketValidator.validateTicketAvailability(ticketIds, tickets, userId);
+      // Validate ticket availability
+      if (tickets.length !== numericTicketIds.length) {
+        const availableIds = tickets.map(t => t.ticket_id);
+        const unavailableIds = numericTicketIds.filter(id => !availableIds.includes(id));
+        console.log('🎫 PURCHASE DEBUG: Available IDs:', availableIds);
+        console.log('🎫 PURCHASE DEBUG: Unavailable IDs:', unavailableIds);
+        throw new Error(`ลอตเตอรี่บางใบไม่พร้อมใช้งาน (${unavailableIds.length} ใบ)`);
+      }
 
       const totalCost = tickets.reduce((sum, ticket) => sum + parseFloat(ticket.price), 0);
 
@@ -138,13 +153,15 @@ class TicketService {
       );
 
       if (userResult.length === 0) {
-        UserValidator.validateUserExists(null, userId);
+        throw new Error('ไม่พบผู้ใช้ในระบบ');
       }
 
       const currentWallet = parseFloat(userResult[0].wallet);
 
       // Validate wallet has sufficient funds
-      WalletValidator.validateSufficientFunds(currentWallet, totalCost, userId);
+      if (currentWallet < totalCost) {
+        throw new Error(`ยอดเงินไม่เพียงพอ ต้องการ ${totalCost} บาท มีอยู่ ${currentWallet} บาท`);
+      }
 
       // Update user wallet
       const newWallet = currentWallet - totalCost;
@@ -162,9 +179,11 @@ class TicketService {
       // Update ticket status
       await connection.execute(
         `UPDATE Ticket SET status = 'sold', created_by = ?, purchase_id = ? WHERE ticket_id IN (${placeholders})`,
-        [userId, purchaseResult.insertId, ...ticketIds]
+        [userId, purchaseResult.insertId, ...numericTicketIds]
       );
 
+      await connection.commit();
+      
       return {
         success: true,
         purchaseId: purchaseResult.insertId,
@@ -172,7 +191,13 @@ class TicketService {
         totalCost: totalCost,
         remainingWallet: newWallet
       };
-    }, getConnection, 'purchaseTickets', { ticketIds, userId });
+      
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      await connection.end();
+    }
   }
 
   /**

@@ -3,12 +3,11 @@ const { getConnection } = require('../dbconnect');
 const DrawService = require('../services/DrawService');
 const { requireAdmin, authenticateToken } = require('../middleware/auth');
 const { asyncHandler, sendSuccess, sendError } = require('../middleware/errorHandler');
-const { BusinessLogicError, SystemValidator, InputValidator } = require('../utils/businessLogicValidator');
 
 const router = express.Router();
 
 // ✅ Get Admin Statistics
-router.get('/stats', requireAdmin, asyncHandler(async (req, res) => {
+router.get('/stats', authenticateToken, requireAdmin, asyncHandler(async (req, res) => {
   const connection = await getConnection();
   try {
     // Get member count
@@ -51,20 +50,10 @@ router.post('/reset', authenticateToken, requireAdmin, asyncHandler(async (req, 
   console.log('🔄 ADMIN RESET: Starting system reset...');
   console.log('👤 User requesting reset:', req.user?.username, 'Role:', req.user?.role);
   
+  const connection = await getConnection();
+  console.log('✅ ADMIN RESET: Database connection established');
+  
   try {
-    // Validate system resources before heavy operation
-    console.log('1️⃣ ADMIN RESET: Validating system resources...');
-    SystemValidator.validateSystemResources('system_reset');
-    console.log('✅ ADMIN RESET: System resources OK');
-    
-    const cleanup = SystemValidator.validateConcurrentOperations('system_reset', 1);
-    console.log('✅ ADMIN RESET: Concurrent operations check passed');
-    
-    try {
-      const connection = await getConnection();
-      console.log('✅ ADMIN RESET: Database connection established');
-      
-      try {
         console.log('\n2️⃣ ADMIN RESET: Starting reset process...');
         
         // 1. หา admin user ก่อนลบ
@@ -84,14 +73,26 @@ router.post('/reset', authenticateToken, requireAdmin, asyncHandler(async (req, 
         console.log('\n   🗑️ ADMIN RESET: Deleting Purchase records...');
         const [deletedPurchases] = await connection.execute('DELETE FROM Purchase');
         console.log(`   ✅ ADMIN RESET: Deleted ${deletedPurchases.affectedRows} purchases`);
+        
+        console.log('   🔄 ADMIN RESET: Resetting Purchase AUTO_INCREMENT to 1...');
+        await connection.execute('ALTER TABLE Purchase AUTO_INCREMENT = 1');
+        console.log('   ✅ ADMIN RESET: Purchase AUTO_INCREMENT reset to 1');
 
         console.log('   🗑️ ADMIN RESET: Deleting Prize records...');
         const [deletedPrizes] = await connection.execute('DELETE FROM Prize');
         console.log(`   ✅ ADMIN RESET: Deleted ${deletedPrizes.affectedRows} prizes`);
+        
+        console.log('   🔄 ADMIN RESET: Resetting Prize AUTO_INCREMENT to 1...');
+        await connection.execute('ALTER TABLE Prize AUTO_INCREMENT = 1');
+        console.log('   ✅ ADMIN RESET: Prize AUTO_INCREMENT reset to 1');
 
         console.log('   🗑️ ADMIN RESET: Deleting Ticket records...');
         const [deletedTickets] = await connection.execute('DELETE FROM Ticket');
         console.log(`   ✅ ADMIN RESET: Deleted ${deletedTickets.affectedRows} tickets`);
+        
+        console.log('   🔄 ADMIN RESET: Resetting Ticket AUTO_INCREMENT to 1...');
+        await connection.execute('ALTER TABLE Ticket AUTO_INCREMENT = 1');
+        console.log('   ✅ ADMIN RESET: Ticket AUTO_INCREMENT reset to 1');
         
         console.log('   🗑️ ADMIN RESET: Deleting non-admin users...');
         const [deletedUsers] = await connection.execute(
@@ -127,15 +128,6 @@ router.post('/reset', authenticateToken, requireAdmin, asyncHandler(async (req, 
           adminPreserved: adminUsername
         }, `รีเซ็ทระบบเรียบร้อย ลบข้อมูลทั้งหมด เหลือเฉพาะ admin: ${adminUsername}`);
 
-      } finally {
-        await connection.end();
-        console.log('✅ ADMIN RESET: Database connection closed');
-      }
-    } finally {
-      cleanup(); // Clean up concurrent operation counter
-      console.log('✅ ADMIN RESET: Concurrent operation cleanup completed');
-    }
-    
   } catch (error) {
     console.error('\n❌ ADMIN RESET: Reset function failed:', error.message);
     console.error('❌ ADMIN RESET: Error details:', {
@@ -149,11 +141,117 @@ router.post('/reset', authenticateToken, requireAdmin, asyncHandler(async (req, 
     }
     
     throw error;
+  } finally {
+    await connection.end();
+    console.log('✅ ADMIN RESET: Database connection closed');
+  }
+}));
+
+// ✅ Create Tickets (สร้างตั๋ว 120 ใบ - ต้องไม่มีตั๋วอยู่ก่อน)
+router.post('/create-tickets', authenticateToken, requireAdmin, asyncHandler(async (req, res) => {
+  console.log('🎫 ADMIN CREATE TICKETS: Starting ticket creation...');
+  
+  // Validate system resources before heavy operation
+  SystemValidator.validateSystemResources('ticket_creation');
+  
+  const cleanup = SystemValidator.validateConcurrentOperations('ticket_creation', 1);
+  try {
+    const connection = await getConnection();
+    try {
+      // 1. ตรวจสอบว่ามีตั๋วอยู่ในระบบหรือไม่
+      console.log('1️⃣ ADMIN CREATE TICKETS: Checking existing tickets...');
+      const [existingTickets] = await connection.execute('SELECT COUNT(*) as total FROM Ticket');
+      const ticketCount = existingTickets[0].total;
+      
+      if (ticketCount > 0) {
+        console.log(`❌ ADMIN CREATE TICKETS: Found ${ticketCount} existing tickets`);
+        return sendError(res, 'TICKETS_ALREADY_EXIST', {
+          existingTickets: ticketCount,
+          message: 'ระบบมีตั๋วอยู่แล้ว กรุณารีเซ็ทระบบก่อนสร้างตั๋วใหม่'
+        }, 400);
+      }
+      
+      console.log('✅ ADMIN CREATE TICKETS: No existing tickets found');
+
+      // 2. หา admin user ID
+      console.log('2️⃣ ADMIN CREATE TICKETS: Finding admin user...');
+      const [adminUser] = await connection.execute(
+        "SELECT user_id FROM User WHERE role IN ('owner', 'admin') ORDER BY user_id LIMIT 1"
+      );
+      const adminUserId = adminUser.length > 0 ? adminUser[0].user_id : 1;
+      console.log(`✅ ADMIN CREATE TICKETS: Using admin user ID: ${adminUserId}`);
+
+      // 3. รีเซ็ท AUTO_INCREMENT เพื่อให้เริ่มจาก 1
+      console.log('3️⃣ ADMIN CREATE TICKETS: Resetting AUTO_INCREMENT...');
+      await connection.execute('ALTER TABLE Ticket AUTO_INCREMENT = 1');
+      console.log('✅ ADMIN CREATE TICKETS: AUTO_INCREMENT reset to 1');
+
+      // 4. สร้างตั๋ว 120 ใบ
+      console.log('4️⃣ ADMIN CREATE TICKETS: Generating tickets...');
+      const desiredCount = 120;
+      const price = 80.00;
+      const numbersSet = new Set();
+
+      // Generate unique 6-digit numbers
+      while (numbersSet.size < desiredCount) {
+        const n = Math.floor(Math.random() * 1000000);
+        const s = n.toString().padStart(6, '0');
+        numbersSet.add(s);
+      }
+
+      const numbers = Array.from(numbersSet);
+      console.log(`✅ ADMIN CREATE TICKETS: Generated ${numbers.length} unique numbers`);
+
+      // 5. Insert ตั๋วเป็น batch
+      console.log('5️⃣ ADMIN CREATE TICKETS: Inserting tickets...');
+      const batchSize = 50;
+      let inserted = 0;
+
+      for (let i = 0; i < numbers.length; i += batchSize) {
+        const batch = numbers.slice(i, i + batchSize);
+        const placeholders = batch.map(() => '(?, ?, ?)').join(',');
+        const values = [];
+
+        for (const num of batch) {
+          values.push(num, price, adminUserId);
+        }
+
+        await connection.execute(
+          `INSERT INTO Ticket (number, price, created_by) VALUES ${placeholders}`,
+          values
+        );
+        inserted += batch.length;
+        console.log(`   📝 ADMIN CREATE TICKETS: Inserted batch ${Math.ceil((i + batchSize) / batchSize)} (${inserted}/${desiredCount})`);
+      }
+
+      // 6. ตรวจสอบผลลัพธ์
+      console.log('6️⃣ ADMIN CREATE TICKETS: Verifying results...');
+      const [finalCount] = await connection.execute('SELECT COUNT(*) as total FROM Ticket');
+      const [firstTicket] = await connection.execute('SELECT ticket_id, number FROM Ticket ORDER BY ticket_id LIMIT 1');
+      const [lastTicket] = await connection.execute('SELECT ticket_id, number FROM Ticket ORDER BY ticket_id DESC LIMIT 1');
+      
+      console.log(`✅ ADMIN CREATE TICKETS: Created ${finalCount[0].total} tickets`);
+      console.log(`   📊 First ticket: ID ${firstTicket[0]?.ticket_id}, Number ${firstTicket[0]?.number}`);
+      console.log(`   📊 Last ticket: ID ${lastTicket[0]?.ticket_id}, Number ${lastTicket[0]?.number}`);
+
+      sendSuccess(res, {
+        ticketsCreated: inserted,
+        totalTickets: finalCount[0].total,
+        firstTicketId: firstTicket[0]?.ticket_id,
+        lastTicketId: lastTicket[0]?.ticket_id,
+        pricePerTicket: price
+      }, `สร้างตั๋วลอตเตอรี่ใหม่ ${inserted} ใบเรียบร้อย (ID เริ่มจาก 1)`);
+
+    } finally {
+      await connection.end();
+    }
+  } finally {
+    cleanup(); // Clean up concurrent operation counter
   }
 }));
 
 // ✅ Reset Tickets Only (เก็บไว้สำหรับกรณีที่ต้องการรีเซ็ทแค่ตั๋ว)
-router.post('/reset-tickets', requireAdmin, asyncHandler(async (req, res) => {
+router.post('/reset-tickets', authenticateToken, requireAdmin, asyncHandler(async (req, res) => {
   // Validate system resources before heavy operation
   SystemValidator.validateSystemResources('ticket_reset');
   
@@ -214,7 +312,7 @@ router.post('/reset-tickets', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // ✅ Get all users with enhanced information
-router.get('/users', requireAdmin, asyncHandler(async (req, res) => {
+router.get('/users', authenticateToken, requireAdmin, asyncHandler(async (req, res) => {
   const connection = await getConnection();
   try {
     const [users] = await connection.execute(`
@@ -251,7 +349,7 @@ router.get('/users', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // ✅ Get all purchases
-router.get('/purchases', requireAdmin, asyncHandler(async (req, res) => {
+router.get('/purchases', authenticateToken, requireAdmin, asyncHandler(async (req, res) => {
   const connection = await getConnection();
   try {
     const [purchases] = await connection.execute(`
@@ -271,7 +369,7 @@ router.get('/purchases', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // ✅ Get all tickets with detailed information (Admin only)
-router.get('/tickets', requireAdmin, asyncHandler(async (req, res) => {
+router.get('/tickets', authenticateToken, requireAdmin, asyncHandler(async (req, res) => {
   const connection = await getConnection();
   try {
     const [tickets] = await connection.execute(`
@@ -304,7 +402,7 @@ router.get('/tickets', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // ✅ Get system overview (Admin dashboard data)
-router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
+router.get('/overview', authenticateToken, requireAdmin, asyncHandler(async (req, res) => {
   const connection = await getConnection();
   try {
     // Get comprehensive system statistics
@@ -336,8 +434,9 @@ router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
       SELECT 
         COUNT(*) as total_prizes,
         SUM(amount) as total_prize_amount,
-        SUM(CASE WHEN claimed = 1 THEN amount ELSE 0 END) as claimed_prize_amount
-      FROM Prize
+        COALESCE(SUM(CASE WHEN t.status = 'claimed' THEN p.amount ELSE 0 END), 0) as claimed_prize_amount
+      FROM Prize p
+      LEFT JOIN Ticket t ON t.prize_id = p.prize_id
     `);
 
     const [recentPurchases] = await connection.execute(`
@@ -353,26 +452,26 @@ router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
         total_users: memberCount[0].total + adminCount[0].total
       },
       tickets: {
-        total: ticketStats[0].total_tickets,
-        sold: ticketStats[0].sold_tickets,
-        available: ticketStats[0].available_tickets,
-        claimed: ticketStats[0].claimed_tickets,
-        sold_percentage: ticketStats[0].total_tickets > 0 
+        total: parseInt(ticketStats[0].total_tickets) || 0,
+        sold: parseInt(ticketStats[0].sold_tickets) || 0,
+        available: parseInt(ticketStats[0].available_tickets) || 0,
+        claimed: parseInt(ticketStats[0].claimed_tickets) || 0,
+        sold_percentage: (ticketStats[0].total_tickets && ticketStats[0].total_tickets > 0)
           ? ((ticketStats[0].sold_tickets / ticketStats[0].total_tickets) * 100).toFixed(2)
-          : 0
+          : "0"
       },
       revenue: {
         total_revenue: parseFloat(revenueStats[0].total_revenue) || 0,
         average_ticket_price: parseFloat(revenueStats[0].avg_ticket_price) || 0
       },
       prizes: {
-        total_prizes: prizeStats[0].total_prizes,
+        total_prizes: parseInt(prizeStats[0].total_prizes) || 0,
         total_prize_amount: parseFloat(prizeStats[0].total_prize_amount) || 0,
         claimed_prize_amount: parseFloat(prizeStats[0].claimed_prize_amount) || 0,
-        unclaimed_prize_amount: parseFloat(prizeStats[0].total_prize_amount - prizeStats[0].claimed_prize_amount) || 0
+        unclaimed_prize_amount: parseFloat((prizeStats[0].total_prize_amount || 0) - (prizeStats[0].claimed_prize_amount || 0)) || 0
       },
       activity: {
-        recent_purchases_24h: recentPurchases[0].recent_purchases
+        recent_purchases_24h: parseInt(recentPurchases[0].recent_purchases) || 0
       }
     };
 
@@ -383,55 +482,218 @@ router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // ✅ Create New Draw (Admin only)
-router.post('/draws', requireAdmin, asyncHandler(async (req, res) => {
+router.post('/draws', authenticateToken, requireAdmin, asyncHandler(async (req, res) => {
   const { 
     poolType = 'sold', 
-    prizeStructure = [
-      { rank: 1, amount: 6000000, count: 1 },
-      { rank: 2, amount: 200000, count: 5 },
-      { rank: 3, amount: 80000, count: 10 }
-    ]
+    rewards = [1000000, 500000, 100000, 50000, 10000]
   } = req.body;
 
   // Enhanced validation for draw creation
   if (!['sold', 'all'].includes(poolType)) {
-    throw new BusinessLogicError('ประเภทการออกรางวัลต้องเป็น "sold" หรือ "all"', 'INVALID_POOL_TYPE');
+    const error = new Error('ประเภทการออกรางวัลต้องเป็น "sold" หรือ "all"');
+    error.code = 'INVALID_POOL_TYPE';
+    throw error;
   }
 
-  if (!Array.isArray(prizeStructure) || prizeStructure.length === 0) {
-    throw new BusinessLogicError('กรุณาระบุโครงสร้างรางวัล', 'MISSING_PRIZE_STRUCTURE');
+  // Validate rewards array
+  if (!Array.isArray(rewards) || rewards.length !== 5) {
+    const error = new Error('กรุณาระบุรางวัล 5 รางวัล');
+    error.code = 'INVALID_REWARDS';
+    throw error;
   }
 
-  // Validate each prize in structure
-  prizeStructure.forEach((prize, index) => {
-    if (!prize.rank || !prize.amount || !prize.count) {
-      throw new BusinessLogicError(
-        `โครงสร้างรางวัลไม่ถูกต้องที่ตำแหน่ง ${index + 1}`,
-        'INVALID_PRIZE_STRUCTURE'
-      );
+  // Validate each reward amount
+  for (let i = 0; i < rewards.length; i++) {
+    if (typeof rewards[i] !== 'number' || rewards[i] < 0) {
+      const error = new Error(`รางวัลที่ ${i + 1} ต้องเป็นตัวเลขที่มากกว่าหรือเท่ากับ 0`);
+      error.code = 'INVALID_REWARD_AMOUNT';
+      throw error;
     }
-
-    InputValidator.validateNumber(prize.rank, 'อันดับรางวัล', { required: true, min: 1, integer: true });
-    InputValidator.validateNumber(prize.amount, 'จำนวนเงินรางวัล', { required: true, min: 0 });
-    InputValidator.validateNumber(prize.count, 'จำนวนรางวัล', { required: true, min: 1, integer: true });
-  });
-
-  // Validate system resources before heavy operation
-  SystemValidator.validateSystemResources('draw_creation');
-  
-  const cleanup = SystemValidator.validateConcurrentOperations('draw_creation', 1);
+  }
 
   try {
-    const drawResult = await DrawService.createDraw({
-      poolType,
-      prizeStructure
-    });
+    const connection = await getConnection();
+    try {
+      // Start transaction
+      await connection.beginTransaction();
 
-    sendSuccess(res, {
-      draw: drawResult
-    }, `สร้างการออกรางวัลเรียบร้อย มีผู้ชนะ ${drawResult.totalWinners} คน`, 201);
+      // 1. ตรวจสอบจำนวนตั๋วที่มีตาม poolType
+      let ticketQuery = '';
+      if (poolType === 'sold') {
+        ticketQuery = 'SELECT ticket_id, number FROM Ticket WHERE status = "sold"';
+      } else {
+        // สุ่มจากตั๋วทั้งหมดในระบบ
+        ticketQuery = 'SELECT ticket_id, number FROM Ticket';
+      }
+
+      const [availableTickets] = await connection.execute(ticketQuery);
+      
+      if (poolType === 'sold' && availableTickets.length < 5) {
+        const error = new Error(`ต้องมีตั๋วที่ขายแล้วอย่างน้อย 5 ใบ (มีอยู่ ${availableTickets.length} ใบ)`);
+        error.code = 'INSUFFICIENT_TICKETS';
+        throw error;
+      }
+
+      if (availableTickets.length < 5) {
+        const error = new Error(`ต้องมีตั๋วในระบบอย่างน้อย 5 ใบ (มีอยู่ ${availableTickets.length} ใบ)`);
+        error.code = 'INSUFFICIENT_TICKETS';
+        throw error;
+      }
+
+      // 2. สุ่มเลือกผู้ชนะ (5 รางวัล)
+      const shuffledTickets = [...availableTickets].sort(() => Math.random() - 0.5);
+      
+      // สุ่มรางวัลที่ 1-3 (รางวัลใหญ่) - เลือกตั๋วทั้งใบ
+      const mainWinners = shuffledTickets.slice(0, 3);
+      
+      // สุ่มเลขท้าย 3 ตัวและ 2 ตัว
+      const tail3Digits = String(Math.floor(Math.random() * 1000)).padStart(3, '0');
+      const tail2Digits = String(Math.floor(Math.random() * 100)).padStart(2, '0');
+
+      // 3. สร้าง DrawResult ตามที่ Flutter app ต้องการ
+      const drawId = Date.now().toString();
+      const createdAt = new Date();
+      
+      // 4. สร้าง PrizeItem สำหรับแต่ละรางวัล
+      const prizes = [];
+      const winnersMap = {};
+      
+      // รางวัลที่ 1-3 (รางวัลใหญ่)
+      for (let i = 0; i < 3; i++) {
+        const prizeItem = {
+          tier: i + 1,
+          ticketId: mainWinners[i]?.number || '000000',
+          amount: rewards[i],
+          claimed: false
+        };
+        
+        prizes.push(prizeItem);
+        
+        // เพิ่มใน winners map
+        const tierName = `รางวัลที่ ${i + 1}`;
+        winnersMap[tierName] = [mainWinners[i]?.number || '000000'];
+      }
+      
+      // รางวัลเลขท้าย 3 ตัว (tier 4)
+      const tail3Winners = availableTickets.filter(ticket => 
+        ticket.number.slice(-3) === tail3Digits
+      );
+      
+      prizes.push({
+        tier: 4,
+        ticketId: `เลขท้าย 3 ตัว: ${tail3Digits}`,
+        amount: rewards[3],
+        claimed: false
+      });
+      
+      winnersMap['รางวัลเลขท้าย 3 ตัว'] = tail3Winners.length > 0 ? 
+        tail3Winners.map(t => t.number) : [`เลขท้าย: ${tail3Digits}`];
+      
+      // รางวัลเลขท้าย 2 ตัว (tier 5)
+      const tail2Winners = availableTickets.filter(ticket => 
+        ticket.number.slice(-2) === tail2Digits
+      );
+      
+      prizes.push({
+        tier: 5,
+        ticketId: `เลขท้าย 2 ตัว: ${tail2Digits}`,
+        amount: rewards[4],
+        claimed: false
+      });
+      
+      winnersMap['รางวัลเลขท้าย 2 ตัว'] = tail2Winners.length > 0 ? 
+        tail2Winners.map(t => t.number) : [`เลขท้าย: ${tail2Digits}`];
+
+      // 5. ส่งผลลัพธ์กลับไปยัง Flutter app
+      const drawResult = {
+        id: drawId,
+        poolType: poolType,
+        createdAt: createdAt,
+        prizes: prizes,
+        winners: winnersMap
+      };
+
+      // 6. บันทึกผลรางวัลลงในฐานข้อมูล (ใช้ prize_id foreign key)
+      // ลบรางวัลเก่าและรีเซ็ต prize_id ใน Ticket table
+      await connection.execute('UPDATE Ticket SET prize_id = NULL WHERE prize_id IS NOT NULL');
+      await connection.execute('DELETE FROM Prize');
+      
+      console.log('💾 ADMIN DRAW: Saving prizes to database...');
+      
+      // บันทึกรางวัลที่ 1-3 (รางวัลใหญ่)
+      for (let i = 0; i < 3; i++) {
+        console.log(`   - Saving Prize Tier ${prizes[i].tier}: ${prizes[i].amount} บาท`);
+        
+        // สร้างรางวัลใน Prize table
+        const [result] = await connection.execute(
+          'INSERT INTO Prize (amount, `rank`) VALUES (?, ?)',
+          [prizes[i].amount, prizes[i].tier]
+        );
+        
+        const prizeId = result.insertId;
+        console.log(`   - Created Prize ID: ${prizeId}`);
+        
+        // อัพเดท Ticket.prize_id เพื่อ link กับรางวัล
+        if (mainWinners[i]) {
+          await connection.execute(
+            'UPDATE Ticket SET prize_id = ? WHERE ticket_id = ?',
+            [prizeId, mainWinners[i].ticket_id]
+          );
+          console.log(`   - Linked Ticket ${mainWinners[i].number} to Prize ID ${prizeId}`);
+        }
+      }
+      
+      // บันทึกรางวัลเลขท้าย 3 ตัว (tier 4)
+      console.log(`   - Saving Prize Tier 4 (เลขท้าย 3 ตัว): ${prizes[3].amount} บาท`);
+      const [result4] = await connection.execute(
+        'INSERT INTO Prize (amount, `rank`) VALUES (?, ?)',
+        [prizes[3].amount, 4]
+      );
+      const prizeId4 = result4.insertId;
+      
+      // อัพเดทตั๋วที่ถูกเลขท้าย 3 ตัว
+      for (const winner of tail3Winners) {
+        await connection.execute(
+          'UPDATE Ticket SET prize_id = ? WHERE ticket_id = ?',
+          [prizeId4, winner.ticket_id]
+        );
+        console.log(`   - Linked Ticket ${winner.number} to Tail-3 Prize ID ${prizeId4}`);
+      }
+      
+      // บันทึกรางวัลเลขท้าย 2 ตัว (tier 5)
+      console.log(`   - Saving Prize Tier 5 (เลขท้าย 2 ตัว): ${prizes[4].amount} บาท`);
+      const [result5] = await connection.execute(
+        'INSERT INTO Prize (amount, `rank`) VALUES (?, ?)',
+        [prizes[4].amount, 5]
+      );
+      const prizeId5 = result5.insertId;
+      
+      // อัพเดทตั๋วที่ถูกเลขท้าย 2 ตัว
+      for (const winner of tail2Winners) {
+        await connection.execute(
+          'UPDATE Ticket SET prize_id = ? WHERE ticket_id = ?',
+          [prizeId5, winner.ticket_id]
+        );
+        console.log(`   - Linked Ticket ${winner.number} to Tail-2 Prize ID ${prizeId5}`);
+      }
+
+      // Commit transaction
+      await connection.commit();
+
+      // นับจำนวนผู้ชนะทั้งหมด
+      const totalWinners = mainWinners.length + tail3Winners.length + tail2Winners.length;
+      
+      sendSuccess(res, {
+        drawResult: drawResult
+      }, `ออกรางวัลเรียบร้อย ผู้ชนะ ${totalWinners} คน`, 200);
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      await connection.end();
+    }
   } finally {
-    cleanup(); // Clean up concurrent operation counter
+    // No cleanup needed
   }
 }));
 
@@ -484,12 +746,13 @@ router.get('/draws', async (req, res) => {
 });
 
 // ✅ Get Draw by ID
-router.get('/draws/:drawId', requireAdmin, asyncHandler(async (req, res) => {
-  const drawId = InputValidator.validateNumber(req.params.drawId, 'รหัสการออกรางวัล', { 
-    required: true, 
-    min: 1, 
-    integer: true 
-  });
+router.get('/draws/:drawId', authenticateToken, requireAdmin, asyncHandler(async (req, res) => {
+  const drawId = parseInt(req.params.drawId);
+  if (isNaN(drawId) || drawId <= 0) {
+    const error = new Error('รหัสการออกรางวัลต้องเป็นตัวเลขที่มากกว่า 0');
+    error.code = 'INVALID_DRAW_ID';
+    throw error;
+  }
 
   const draw = await DrawService.getDrawById(drawId);
   
@@ -501,7 +764,7 @@ router.get('/draws/:drawId', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // ✅ Clear All Draws (Admin only)
-router.delete('/draws', requireAdmin, async (req, res) => {
+router.delete('/draws', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const deletedCount = await DrawService.clearAllDraws();
 
@@ -520,12 +783,13 @@ router.delete('/draws', requireAdmin, async (req, res) => {
 });
 
 // ✅ Get detailed user information with purchase history (Admin only)
-router.get('/users/:userId/details', requireAdmin, asyncHandler(async (req, res) => {
-  const userId = InputValidator.validateNumber(req.params.userId, 'รหัสผู้ใช้', { 
-    required: true, 
-    min: 1, 
-    integer: true 
-  });
+router.get('/users/:userId/details', authenticateToken, requireAdmin, asyncHandler(async (req, res) => {
+  const userId = parseInt(req.params.userId);
+  if (isNaN(userId) || userId <= 0) {
+    const error = new Error('รหัสผู้ใช้ต้องเป็นตัวเลขที่มากกว่า 0');
+    error.code = 'INVALID_USER_ID';
+    throw error;
+  }
 
   const connection = await getConnection();
   try {
@@ -606,7 +870,7 @@ router.get('/users/:userId/details', requireAdmin, asyncHandler(async (req, res)
 }));
 
 // ✅ Get system activity log (Admin only)
-router.get('/activity', requireAdmin, asyncHandler(async (req, res) => {
+router.get('/activity', authenticateToken, requireAdmin, asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit) || 50;
   const offset = parseInt(req.query.offset) || 0;
 

@@ -56,10 +56,17 @@ function verifyToken(token) {
  */
 async function authenticateToken(req, res, next) {
   try {
+    console.log('🔐 AUTH: Checking authentication...');
+    console.log('📋 AUTH: Headers:', req.headers);
+    
     const authHeader = req.headers['authorization'];
+    console.log('🎫 AUTH: Auth header:', authHeader);
+    
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+    console.log('🔑 AUTH: Extracted token:', token ? `${token.substring(0, 20)}...` : 'null');
 
     if (!token) {
+      console.log('❌ AUTH: No token provided');
       return res.status(401).json({ 
         error: 'Access token required',
         code: 'NO_TOKEN'
@@ -67,15 +74,19 @@ async function authenticateToken(req, res, next) {
     }
 
     const decoded = verifyToken(token);
+    console.log('✅ AUTH: Token verified, userId:', decoded.userId);
     
     // Get fresh user data from database
     const user = await UserService.findById(decoded.userId);
     if (!user) {
+      console.log('❌ AUTH: User not found in database:', decoded.userId);
       return res.status(401).json({ 
         error: 'User not found',
         code: 'USER_NOT_FOUND'
       });
     }
+
+    console.log('✅ AUTH: User found:', user.username, 'Role:', user.role);
 
     // Add user context to request
     req.user = {
@@ -83,6 +94,7 @@ async function authenticateToken(req, res, next) {
       isAdmin: user.role === 'owner' || user.role === 'admin'
     };
 
+    console.log('✅ AUTH: Authentication successful, proceeding...');
     next();
   } catch (error) {
 

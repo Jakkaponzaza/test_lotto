@@ -40,13 +40,25 @@ async function getConnection() {
       ssl: !!dbConfig.ssl
     });
 
-    const connection = await mysql.createConnection(dbConfig);
-
-    // Test connection with a simple query
-    await connection.execute('SELECT 1');
-    console.log('✅ Database connection successful');
-
-    return connection;
+    // Check if using Render PostgreSQL (DATABASE_URL exists)
+    if (process.env.DATABASE_URL) {
+      console.log('🐘 Using PostgreSQL (Render)');
+      const pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: { rejectUnauthorized: false }
+      });
+      
+      const client = await pool.connect();
+      await client.query('SELECT 1');
+      console.log('✅ PostgreSQL connection successful');
+      return client;
+    } else {
+      console.log('🐬 Using MySQL (External)');
+      const connection = await mysql.createConnection(dbConfig);
+      await connection.execute('SELECT 1');
+      console.log('✅ MySQL connection successful');
+      return connection;
+    }
   }, 'getConnection');
 }
 

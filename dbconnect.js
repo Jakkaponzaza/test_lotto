@@ -3,6 +3,11 @@ const { Pool } = require('pg'); // For PostgreSQL support
 const configLoader = require('./config-loader');
 const { databaseErrorHandler } = require('./utils/databaseErrorHandler');
 
+// Load environment variables
+if (process.env.NODE_ENV === 'production') {
+  require('dotenv').config({ path: '.env.production' });
+}
+
 // Load configuration
 const config = configLoader.loadConfig();
 // Create database config with proper SSL handling
@@ -32,6 +37,13 @@ if (process.env.DB_SSL === 'true') {
 // Helper function to get database connection with retry logic
 async function getConnection() {
   return databaseErrorHandler.executeWithRetry(async () => {
+    console.log('🔌 Environment variables check:', {
+      NODE_ENV: process.env.NODE_ENV,
+      DB_HOST: process.env.DB_HOST,
+      DB_USER: process.env.DB_USER,
+      DATABASE_URL: !!process.env.DATABASE_URL
+    });
+
     console.log('🔌 Attempting database connection to:', {
       host: dbConfig.host,
       port: dbConfig.port,

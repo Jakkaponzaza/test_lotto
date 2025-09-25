@@ -1,3 +1,8 @@
+// Load environment variables first
+if (process.env.NODE_ENV === 'production') {
+  require('dotenv').config({ path: '.env.production' });
+}
+
 const express = require('express');
 const cors = require('cors');
 const configLoader = require('./config-loader');

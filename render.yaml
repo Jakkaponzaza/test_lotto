@@ -27,4 +27,4 @@ services:
       - key: CORS_ORIGIN
         value: "*"
       - key: DB_SSL
-        value: "false"
+        value: "true"

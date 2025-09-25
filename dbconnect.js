@@ -1,4 +1,5 @@
 const mysql = require('mysql2/promise');
+const { Pool } = require('pg'); // For PostgreSQL support
 const configLoader = require('./config-loader');
 const { databaseErrorHandler } = require('./utils/databaseErrorHandler');
 
@@ -16,9 +17,14 @@ const dbConfig = {
   connectTimeout: 60000
 };
 
-// Add SSL only if needed
+// Add SSL configuration for external database
 if (process.env.DB_SSL === 'true') {
-  dbConfig.ssl = { rejectUnauthorized: false };
+  dbConfig.ssl = {
+    rejectUnauthorized: false,
+    ca: undefined,
+    key: undefined,
+    cert: undefined
+  };
 }
 
 

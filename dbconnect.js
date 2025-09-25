@@ -4,6 +4,7 @@ const { databaseErrorHandler } = require('./utils/databaseErrorHandler');
 
 // Load configuration
 const config = configLoader.loadConfig();
+// Create database config with proper SSL handling
 const dbConfig = {
   host: config.database.host,
   user: config.database.user,
@@ -12,26 +13,33 @@ const dbConfig = {
   port: config.database.port,
   charset: 'utf8mb4',
   timezone: '+00:00',
-  connectTimeout: 60000,
-  idleTimeout: 300000,
-  enableKeepAlive: true,
-  keepAliveInitialDelay: 0
+  connectTimeout: 60000
 };
+
+// Add SSL only if needed
+if (process.env.DB_SSL === 'true') {
+  dbConfig.ssl = { rejectUnauthorized: false };
+}
 
 
 
 // Helper function to get database connection with retry logic
 async function getConnection() {
   return databaseErrorHandler.executeWithRetry(async () => {
+    console.log('🔌 Attempting database connection to:', {
+      host: dbConfig.host,
+      port: dbConfig.port,
+      database: dbConfig.database,
+      user: dbConfig.user,
+      ssl: !!dbConfig.ssl
+    });
+
     const connection = await mysql.createConnection(dbConfig);
-    
-    // Validate connection
-    const isValid = await databaseErrorHandler.validateConnection(connection);
-    if (!isValid) {
-      await connection.end();
-      throw new Error('Connection validation failed');
-    }
-    
+
+    // Test connection with a simple query
+    await connection.execute('SELECT 1');
+    console.log('✅ Database connection successful');
+
     return connection;
   }, 'getConnection');
 }

@@ -11,34 +11,20 @@ services:
       - key: PORT
         value: 10000
       - key: DB_HOST
-        fromDatabase:
-          name: lotto-db
-          property: host
+        value: 202.28.34.203
       - key: DB_PORT
-        fromDatabase:
-          name: lotto-db
-          property: port
+        value: 3306
       - key: DB_USER
-        fromDatabase:
-          name: lotto-db
-          property: user
+        value: mb68_65011212115
       - key: DB_PASS
-        fromDatabase:
-          name: lotto-db
-          property: password
+        value: g0bPZ$Cib3i9
       - key: DB_NAME
-        fromDatabase:
-          name: lotto-db
-          property: database
+        value: mb68_65011212115
       - key: JWT_SECRET
         generateValue: true
       - key: BCRYPT_ROUNDS
         value: 12
       - key: CORS_ORIGIN
         value: "*"
-
-databases:
-  - name: lotto-db
-    databaseName: lotto_database
-    user: lotto_user
-    plan: free
+      - key: DB_SSL
+        value: "false"

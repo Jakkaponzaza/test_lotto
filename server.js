@@ -254,17 +254,27 @@ async function initializeLotteryTickets() {
 // Start server with REST API only
 app.listen(PORT, async () => {
   console.log(`🚀 Lotto REST API Server running on port ${PORT}`);
+  console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔗 Health check: http://localhost:${PORT}/health`);
   
   try {
+    console.log('🔄 Initializing database connection...');
+    
     // Validate and fix database schema first
     await validateAndFixDatabase();
+    console.log('✅ Database schema validated');
     
     // Initialize database and create required tables
     await initializeDatabase();
+    console.log('✅ Database initialized');
     
     // Initialize lottery tickets if needed
     await initializeLotteryTickets();
+    console.log('✅ Lottery tickets initialized');
+    
+    console.log('🎉 Server initialization completed successfully!');
   } catch (error) {
     console.error('❌ Server initialization failed:', error);
+    console.error('⚠️  Server will continue running but some features may not work');
   }
 });

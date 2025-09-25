@@ -32,6 +32,44 @@ app.use(requestLogger);
 // Apply rate limiting to API routes - เพิ่มขีดจำกัดให้มากขึ้น
 app.use('/api/', rateLimit(5 * 60 * 1000, 500)); // 500 requests per 5 minutes
 
+// API info endpoint
+app.get('/api', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Lotto API v1.0.0',
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      authentication: {
+        login: 'POST /api/auth/login',
+        register: 'POST /api/register',
+        refresh: 'POST /api/auth/refresh',
+        logout: 'POST /api/auth/logout'
+      },
+      users: {
+        profile: 'GET /api/users/profile',
+        wallet: 'GET /api/users/wallet',
+        purchases: 'GET /api/users/purchases',
+        winnings: 'GET /api/users/winnings'
+      },
+      tickets: {
+        list: 'GET /api/tickets',
+        myTickets: 'GET /api/tickets/my-tickets',
+        purchase: 'POST /api/tickets/purchase'
+      },
+      prizes: {
+        list: 'GET /api/prizes',
+        claim: 'POST /api/prizes/claim',
+        checkWinner: 'GET /api/prizes/check/:ticketNumber'
+      },
+      admin: {
+        stats: 'GET /api/admin/stats',
+        users: 'GET /api/admin/users',
+        draws: 'GET /api/admin/draws'
+      }
+    }
+  });
+});
+
 // API Routes using modular controllers
 app.use('/api/auth', authController);
 app.use('/api/tickets', ticketsController);
@@ -111,6 +149,22 @@ app.post('/api/register', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   }
+});
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'ยินดีต้อนรับสู่ Lotto API Server',
+    version: '1.0.0',
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString(),
+    documentation: {
+      health: '/health',
+      api: '/api',
+      endpoints: 'ดู /health สำหรับรายการ endpoints ทั้งหมด'
+    }
+  });
 });
 
 // Health check endpoint

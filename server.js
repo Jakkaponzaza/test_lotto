@@ -24,7 +24,7 @@ const usersController = require('./controllers/users');
 // Create Express app
 const app = express();
 
-const PORT = configLoader.serverPort;
+const PORT = process.env.PORT || configLoader.serverPort || 3000;
 
 console.log('🚀 Lotto REST API Server starting...');
 
